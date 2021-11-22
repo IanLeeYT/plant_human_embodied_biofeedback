@@ -2,7 +2,6 @@ import numpy as np
 from math import pi
 import matplotlib.pyplot as plt
 from detecta import detect_peaks
-# from scipy.signal import find_peaks
 
 # Set figure size
 plt.rcParams["figure.figsize"] = (15, 6)
@@ -38,22 +37,6 @@ def plot_fft(y, sampling_freq=1, max_freq=0):
     axis.set_ylabel('Amplitude')
     plt.show()
 
-def plot_general(y, x=[], sampling_freq=1, title="Plot"):
-    """
-    general format for plotting frequency based data.
-    """
-    if not isinstance(y, np.ndarray) and not isinstance(y,list):
-        print("Can not be plotted")
-        return
-    _, axis = plt.subplots(1, 1)
-    axis.set_title(title)
-    if x == []:
-        len_y = len(y)
-        x = np.linspace(0,len_y/sampling_freq,len_y) 
-    axis.plot(x,y)
-    axis.set_xlabel("Time (s)")
-    plt.show()
-
 def inv_fft(y):
     return np.fft.ifft(y)
 
@@ -75,7 +58,7 @@ def peaks(x, y):
     ymean = np.mean(y)
     ystd = np.std(y) 
     # peaks, property = find_peaks(y,height=ymean+2*ystd, distance=d)
-    peak_locations = detect_peaks(y, mph=ymean+2*ystd, mpd=d, show=True)
+    peak_locations = detect_peaks(y, mph=ymean+1*ystd, mpd=d, show=True)
     freqs = x[peak_locations]
     amplitudes = abs(y[peak_locations])
     freq_amp = np.vstack((freqs, amplitudes))
@@ -97,38 +80,45 @@ def cos_reconstruction(freq_amp, components, bias=0):
 
 
 if __name__ == "__main__":
-    # How many time points are needed i,e., Sampling Frequency
-    samplingFrequency = 100
+    pass
+    # # How many time points are needed i,e., Sampling Frequency
+    # samplingFrequency = 100
 
-    # At what intervals time points are sampled
-    samplingInterval  = 1 / samplingFrequency
+    # # At what intervals time points are sampled
+    # samplingInterval  = 1 / samplingFrequency
 
-    # Begin time period of the signals
-    beginTime = 0
+    # # Begin time period of the signals
+    # beginTime = 0
 
-    # End time period of the signals
-    endTime = 5
+    # # End time period of the signals
+    # endTime = 5
 
-    # Frequency of the signals
-    signal1Frequency = 3
-    signal2Frequency = 13
-    signal3Frequency = 35
+    # # Frequency of the signals
+    # signal1Frequency = 3
+    # signal2Frequency = 13
+    # signal3Frequency = 35
 
-    # Time points
-    time = np.arange(beginTime, endTime, samplingInterval)
+    # # Time points
+    # time = np.arange(beginTime, endTime, samplingInterval)
 
-    noise = np.random.rand(time.shape[-1]) * 3
+    # noise = np.random.rand(time.shape[-1]) * 3
 
-    # Create sine waves
-    amplitude1 = 1 * np.sin(2*np.pi*signal1Frequency*time) 
-    amplitude2 = 2 * np.sin(2*np.pi*signal2Frequency*time)
-    amplitude3 = 0.5 * np.sin(2*np.pi*signal3Frequency*time) 
-    amplitude = amplitude1 + amplitude2 + amplitude3 + noise
+    # # Create sine waves
+    # amplitude1 = 1 * np.sin(2*np.pi*signal1Frequency*time) 
+    # amplitude2 = 2 * np.sin(2*np.pi*signal2Frequency*time)
+    # amplitude3 = 0.5 * np.sin(2*np.pi*signal3Frequency*time) 
+    # amplitude = amplitude1 + amplitude2 + amplitude3 + noise
 
-    plot_fft(amplitude, samplingFrequency)
+    # plot_fft(amplitude, samplingFrequency)
 
-    #try inverse fft function
-    xf_, yf_ = norm_fft(amplitude1, samplingFrequency) 
-    iyf = np.fft.fft(yf_)
-    plot_general(y=iyf, sampling_freq=samplingFrequency)
+    # #try inverse fft function
+    # xf_, yf_ = norm_fft(amplitude1, samplingFrequency) 
+    # iyf = np.fft.fft(yf_)
+    # plot_general(y=iyf, sampling_freq=samplingFrequency)
+
+
+    # fourier transform test
+    # frequencies: 1/3 & 2
+    # fft.plot_general(np.cos(1/3*2*np.pi*np.arange(0,100,0.1))+np.cos(2*2*np.pi*np.arange(0,100,0.1)),sampling_freq=10)
+    # fft.plot_fft(np.cos(1/3*2*np.pi*np.arange(0,100,0.1))+np.cos(2*2*np.pi*np.arange(0,100,0.1)),sampling_freq=10, max_freq=3)
 

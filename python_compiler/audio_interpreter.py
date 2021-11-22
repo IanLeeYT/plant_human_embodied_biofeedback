@@ -1,8 +1,9 @@
 import numpy as np
-from scipy.io.wavfile import read
 from pydub import AudioSegment
 from shutil import copyfile
 import os
+import librosa    
+# from scipy.io.wavfile import read
 
 file_extentions = [".wav", ".mp3"]
 
@@ -20,7 +21,7 @@ def mp3_to_wav(file_path, new_file_path):
 
 def audio_to_array(file_path):
   """
-  return the np array representing audio [file] and the sampling frequency
+  return the np array representing audio [file_path] and the sampling frequency (default = 11025hz)
 
   copies and converts the file into audio/_name_of_file_.wav if needed
   """
@@ -32,11 +33,8 @@ def audio_to_array(file_path):
       mp3_to_wav(file_path, new_file_path)
     else:
       copyfile(file_path, new_file_path)
-  rate, arr = read(new_file_path)
+  arr, rate = librosa.load(new_file_path, sr=11025) # sampling rate is 11025hz
+  # rate, arr = read(new_file_path)
   audio_array = np.array(arr ,dtype=float) 
   audio_array = audio_array if audio_array.ndim == 1 else audio_array[:,0]
   return audio_array, rate
-  
-def low_pass_filter():
-    # https://stackoverflow.com/questions/24920346/filtering-a-wav-file-using-python
-    pass
