@@ -5,6 +5,7 @@ import freq_filter
 import time
 import matplotlib.pyplot as plt 
 import serial
+import struct
 
 # cached data available for future usage
 audio_catalog = dict()
@@ -31,36 +32,70 @@ def noisy_array(arr,low,high):
 def max_array(arr, dt, freq):
   """
   return an array where elements are the maximum of data in 
-  [arr] consecutive local blocks of time intervals [dt] seconds 
+  [arr] consecutive local buckets of time intervals [dt] seconds 
   """
   freq_dt = int(freq*dt)
   max_arr = np.zeros(len(arr)//freq_dt)
   for i in range(len(arr)//freq_dt):
     max_arr[i] = np.max(np.abs(arr[i*freq_dt:(i+1)*freq_dt]))
-  plot_general(max_arr)
   return max_arr
 
-def reg_array(arr, dt):
+# not used
+def derivative_array(arr, dt):
+  """
+  return the first order derivative (difference) of [arr]
+  """
   reg_arr = (np.roll(arr,-1) - arr) / dt
-  plot_general(reg_arr)
   return reg_arr
 
 def reg_calibrate_array(arr, dt, transfer_rate):
+  """
+  adjust length of [arr] via averaging buckets of elements. Grouping size is [transfer_rate]/[dt]
+
+  Precondition: [transfer_rate] >= [dt]
+  """
   grouping = int(transfer_rate / dt)
   reg_arr = np.nanmean(np.pad(arr.astype(float), (0, (grouping - arr.size%grouping) % grouping), constant_values=np.NaN).reshape(-1, grouping), axis=1)
-  plot_general(reg_arr)
   return reg_arr 
 
-def normalizexy_array(arr, noise):
+def normalizexy_array(arr):
   """
   normalize array: positive maximum == 255 && positive minimum == 0
+
+  Precondition: arr is a positive array
   """
+  max_feed = 255
   maxv = np.max(arr)
   minv = np.min(np.abs(arr)) 
-  norm_arr = (arr - minv) * (255-np.abs(noise))/maxv
-  plot_general(norm_arr)
+  norm_arr = (arr - minv) * (max_feed)/maxv
   return norm_arr
 
+def scale_array(arr, scale):
+  """
+  scale [arr] (type: array) by [scale]
+  """
+  return arr * scale 
+
+def bound_extremes(arr, n_sd):
+  """
+  remove elements in [arr] that are [n_sd] standard deviations away
+  """
+  mean = np.mean(arr)
+  std = np.std(arr)
+  max_arr = mean + n_sd * std
+  min_arr = mean - n_sd * std
+  return np.clip(arr, min_arr, max_arr)
+
+def int_array(arr):
+  """
+  convert [arr] to integer array
+  """
+  return arr.astype(int) 
+
+def dynamic_amplification(arr):
+  pass
+
+# communicate with arduino board to control regulator pressure
 def send_serial(port, file_name, transfer_rate):
   """
   send serial data to arduino
@@ -68,23 +103,39 @@ def send_serial(port, file_name, transfer_rate):
   baudrate = 9600
   ser = serial.Serial(port, baudrate)
   time.sleep(2)   #wait for serial connection
-  for d in audio_catalog[file_name]:
-    ser.write(bytes(d))
-    time.sleep(transfer_rate)
+  sending = True 
+  # when user input detected, break loop
+  try:
+    while sending:
+      data = int_array(audio_catalog[file_name])
+      for d in data:
+        print(d)
+        ser.write(struct.pack('>B',d))
+        time.sleep(transfer_rate)
+  except KeyboardInterrupt:
+    pass
   ser.close()
 
-def regval_real(port, dt=1, transfer_rate = 1, noise=0):
+# discriminative function (uses helepr functions declared above)
+def regval_real(port, dt=0.1, transfer_rate = 1):
   """
-  establish a connection with an Arduino system via [port]
+  opens a user session where user can input the path to an audio file for pneumatic actuation or input end/quit to end session.
 
-  break down file in time blocks of [dt] seconds and contruct the breathing function
-  based on the derivative of localized maximums
+  breaks down audio file in time blocks of [dt] seconds and contruct the breathing function
+  based on the localized maximums. 
 
-  rate of communication is [transfer_rate] Hz. 
+  establishes a connection with an Arduino system via [port]
 
-  precondition: transfer_rate >= dt
+  rate of communication is [transfer_rate] Hz
+
+  reg_val response values:
+    min - max : 30 - 34 
+
+  precondition: [transfer_rate] >= [dt]
   """
   cont = True
+  # scale = 0.20   # for scaling from 255
+  n_sd = 3.0  # for removing outliers in array
   while cont:
     try:
       user = input("Please enter the path to audio file: ")
@@ -97,13 +148,15 @@ def regval_real(port, dt=1, transfer_rate = 1, noise=0):
         if file_name not in audio_catalog.keys():
           print("...Loading...\n")  
           arr, freq = audio_interpreter.audio_to_array(user)
-          plot_general(arr, sampling_freq=freq)
           max_arr = max_array(arr, dt, freq)
-          reg_arr = reg_array(max_arr, dt)
-          reg_arr = reg_calibrate_array(reg_arr, dt, transfer_rate)
-          norm_reg_arr = normalizexy_array(reg_arr, noise)
-          norm_reg_arr = noisy_array(norm_reg_arr, -1*noise, noise)
+          reg_arr = reg_calibrate_array(max_arr, dt, transfer_rate)
+          reg_arr = bound_extremes(reg_arr, n_sd)
+          norm_reg_arr = normalizexy_array(reg_arr)
+          # norm_reg_arr = scale_array(norm_reg_arr, scale)
+          norm_reg_arr = dynamic_amplification(norm_reg_arr)
+          plot_general(norm_reg_arr)
           audio_catalog[file_name] = norm_reg_arr
+          print(audio_catalog[file_name])
           print("cached")
         else:
           print("retrieve from cach\n")
@@ -112,22 +165,25 @@ def regval_real(port, dt=1, transfer_rate = 1, noise=0):
     except Exception as err:
       print(f"Invalid.: {err}\nTry again\n")
 
+
+# generative function (uses helepr functions declared above)
 def regval_fft(file, max_freq, dt=0.01, default_cos_funcs = 10):
   """
   return cosine function reconstructed from fast fourier transform of [file]
   """
   arr, freq = audio_interpreter.audio_to_array(file)
+  tlen = len(arr) // freq
+  tarray = np.arange(tlen)
   arr = max_array(arr, dt, freq)
   freq = 1/dt
   arx, ary = fft.norm_fft(arr,sampling_freq=freq,max_freq=max_freq)
   freq_amp= fft.peaks(arx, ary)
   freq_amp = fft.normalize_array(freq_amp)
   cos_func = fft.cos_reconstruction(freq_amp, default_cos_funcs)
-  return cos_func
+  return cos_func(tarray)
 
 
-
-
+# for testing only
 def test(file):
   """
   for testing purposes only
@@ -156,13 +212,15 @@ def test(file):
   
 if __name__ == "__main__":
 
+  # communication port
+  com_port = "/dev/cu.usbmodem14201"
+
   # Initialize parameters
-  com_port = ""
   transfer_rate = 1
   dtime = 0.1
-  noise = 25
 
-  file = "bird_song1.wav"
+
+  # file = "bird_song1.wav"
   # file = "bird_song2.wav"
   # file = "forest1.wav"
   # file = "ocean1.wav"
@@ -171,6 +229,13 @@ if __name__ == "__main__":
   # file = "ocean4.wav"
   # file = "ocean5.wav"
   # file = "thunder_storm1.wav"
-
-  regval_real(com_port, dtime, transfer_rate, noise)
   # test(file)
+
+  # main function for analyzing audio files and arduino communication
+  regval_real(com_port, dtime, transfer_rate)
+
+
+# TODO
+# 1. baseline activity
+# 2. microphone input and live interaction
+# 3. sync with audio output

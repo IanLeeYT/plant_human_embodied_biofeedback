@@ -33,7 +33,7 @@ def audio_to_array(file_path):
       mp3_to_wav(file_path, new_file_path)
     else:
       copyfile(file_path, new_file_path)
-  arr, rate = librosa.load(new_file_path, sr=11025) # sampling rate is 11025hz
+  arr, rate = librosa.load(new_file_path, sr=22050) # sampling rate is 22050hz
   # rate, arr = read(new_file_path)
   audio_array = np.array(arr ,dtype=float) 
   audio_array = audio_array if audio_array.ndim == 1 else audio_array[:,0]
