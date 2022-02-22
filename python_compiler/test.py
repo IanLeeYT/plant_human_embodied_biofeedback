@@ -19,7 +19,7 @@ def send_serial(port, file_name, transfer_rate):
         ser.write(struct.pack('>B',d))
         time.sleep(transfer_rate)
   except KeyboardInterrupt:
-    pass
+    print("Back to Main")
   ser.close()
 
 if __name__ == "__main__":

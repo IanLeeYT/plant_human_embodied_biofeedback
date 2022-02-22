@@ -1,3 +1,5 @@
+
+#%%
 import numpy as np
 import fft
 import audio_interpreter
@@ -6,7 +8,9 @@ import time
 import matplotlib.pyplot as plt 
 import serial
 import struct
+from pygame import mixer
 
+#%%
 # cached data available for future usage
 audio_catalog = dict()
 
@@ -58,16 +62,17 @@ def reg_calibrate_array(arr, dt, transfer_rate):
   reg_arr = np.nanmean(np.pad(arr.astype(float), (0, (grouping - arr.size%grouping) % grouping), constant_values=np.NaN).reshape(-1, grouping), axis=1)
   return reg_arr 
 
-def normalizexy_array(arr):
+def normalizexy_array(arr, pmx):
   """
-  normalize array: positive maximum == 255 && positive minimum == 0
+  normalize array: positive maximum == [pmx] * max_feed_factor && positive minimum == 0
 
   Precondition: arr is a positive array
   """
-  max_feed = 255
+  max_feed_factor = 1.5
+  max_feed = pmx * max_feed_factor
   maxv = np.max(arr)
   minv = np.min(np.abs(arr)) 
-  norm_arr = (arr - minv) * (max_feed)/maxv
+  norm_arr = (arr - minv) * max_feed / maxv
   return norm_arr
 
 def scale_array(arr, scale):
@@ -76,7 +81,7 @@ def scale_array(arr, scale):
   """
   return arr * scale 
 
-def bound_extremes(arr, n_sd):
+def bound_outliers(arr, n_sd):
   """
   remove elements in [arr] that are [n_sd] standard deviations away
   """
@@ -92,8 +97,30 @@ def int_array(arr):
   """
   return arr.astype(int) 
 
-def dynamic_amplification(arr):
-  pass
+def bound_extremes_array(arr, uppder_bound, lower_bound):
+  return np.clip(arr, lower_bound, uppder_bound, out=arr)
+
+def dynamic_amplification(arr, pmx):
+  """
+  Extract peaks and amplify audio signal change over a threshold. Incorporate baseline activity to [arr]
+
+  precondition: 255 >= [mx] >= 0
+  """
+  threshold = pmx/3
+  pmids = pmx - 1
+  pmidw = pmx - 2
+  pweak = pmx - 3
+  pnone = 0
+  baseline = np.resize(np.array([pmidw, 0, 0]), len(arr))
+  arr_res = np.copy(arr)
+  for i in range(len(arr)):
+    if pmids > arr[i] > threshold and arr[i] > arr[i-1] and arr[i] > arr[min(i+1,len(arr)-1)]:
+      arr_res[i] = pmids
+    arr_res[i] = max(arr_res[i], baseline[i])
+  return arr_res
+
+def set_sound(file_path):
+  mixer.music.load(file_path) 
 
 # communicate with arduino board to control regulator pressure
 def send_serial(port, file_name, transfer_rate):
@@ -107,13 +134,15 @@ def send_serial(port, file_name, transfer_rate):
   # when user input detected, break loop
   try:
     while sending:
-      data = int_array(audio_catalog[file_name])
+      data = audio_catalog[file_name]
+      mixer.music.play()
       for d in data:
         print(d)
         ser.write(struct.pack('>B',d))
         time.sleep(transfer_rate)
   except KeyboardInterrupt:
-    pass
+    print("Back to Main")
+  mixer.music.stop()
   ser.close()
 
 # discriminative function (uses helepr functions declared above)
@@ -134,8 +163,9 @@ def regval_real(port, dt=0.1, transfer_rate = 1):
   precondition: [transfer_rate] >= [dt]
   """
   cont = True
-  # scale = 0.20   # for scaling from 255
+  pmx = 34
   n_sd = 3.0  # for removing outliers in array
+  mixer.init() # initialize pygame.mixer for audio
   while cont:
     try:
       user = input("Please enter the path to audio file: ")
@@ -150,16 +180,16 @@ def regval_real(port, dt=0.1, transfer_rate = 1):
           arr, freq = audio_interpreter.audio_to_array(user)
           max_arr = max_array(arr, dt, freq)
           reg_arr = reg_calibrate_array(max_arr, dt, transfer_rate)
-          reg_arr = bound_extremes(reg_arr, n_sd)
-          norm_reg_arr = normalizexy_array(reg_arr)
-          # norm_reg_arr = scale_array(norm_reg_arr, scale)
-          norm_reg_arr = dynamic_amplification(norm_reg_arr)
+          reg_arr = bound_outliers(reg_arr, n_sd)
+          norm_reg_arr = normalizexy_array(reg_arr, pmx)
+          norm_reg_arr = bound_extremes_array(norm_reg_arr, pmx, 0)
+          norm_reg_arr = dynamic_amplification(norm_reg_arr, pmx)
           plot_general(norm_reg_arr)
-          audio_catalog[file_name] = norm_reg_arr
-          print(audio_catalog[file_name])
-          print("cached")
+          audio_catalog[file_name] = int_array(norm_reg_arr)
+          print(f"{audio_catalog[file_name]} cached")
         else:
           print("retrieve from cach\n")
+        set_sound("audio/"+user)
         send_serial(port, file_name, transfer_rate)
         print("Finished")
     except Exception as err:
@@ -210,6 +240,7 @@ def test(file):
   plot_general(cos_func(np.arange(0,100,0.1)))
   plot_general(cos_func(np.arange(0,100)))
   
+#%%
 if __name__ == "__main__":
 
   # communication port
