@@ -20,6 +20,7 @@ def send_serial(port, file_name, transfer_rate):
         time.sleep(transfer_rate)
   except KeyboardInterrupt:
     print("Back to Main")
+  ser.write(struct.pack('>B',1))
   ser.close()
 
 if __name__ == "__main__":
@@ -40,10 +41,15 @@ if __name__ == "__main__":
   test4 = np.array([26,1,1,26,1,1,26,1,1,26,1,1,26,1,1])
 
   # change the second variable [test] to try out different tests
-  # while True:
-  #   input = int(input("Input: "))
-  #   if input == "end" or input == "quit":
-  #     break
-  #   send_serial(com_port, [input], transfer_rate)
+  while True:
+    p_input = input("Input: ")
+    if p_input == "end" or p_input == "quit":
+      break
+    try:
+      p_input = int(p_input)
+      send_serial(com_port, [p_input], transfer_rate)
+    except:
+      continue
+ 
 
-  send_serial(com_port, test1, transfer_rate)
+  # send_serial(com_port, test1, transfer_rate)

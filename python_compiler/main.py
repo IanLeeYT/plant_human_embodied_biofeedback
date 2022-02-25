@@ -68,7 +68,7 @@ def normalizexy_array(arr, pmx):
 
   Precondition: arr is a positive array
   """
-  max_feed_factor = 1.5
+  max_feed_factor = 2.0
   max_feed = pmx * max_feed_factor
   maxv = np.max(arr)
   minv = np.min(np.abs(arr)) 
@@ -102,16 +102,19 @@ def bound_extremes_array(arr, uppder_bound, lower_bound):
 
 def dynamic_amplification(arr, pmx):
   """
-  Extract peaks and amplify audio signal change over a threshold. Incorporate baseline activity to [arr]
-
+  Extract peaks and amplify audio signal change over a threshold. 
+  Incorporate baseline activity to [arr]
+  Expand short peaks
+  
   precondition: 255 >= [mx] >= 0
   """
+  frame_len = 5
   threshold = pmx/3
   pmids = pmx - 1
   pmidw = pmx - 2
   pweak = pmx - 3
   pnone = 0
-  baseline = np.resize(np.array([pmidw, 0, 0]), len(arr))
+  baseline = np.resize(np.array([pweak, pweak, 0, 0, 0]), len(arr))
   arr_res = np.copy(arr)
   for i in range(len(arr)):
     if pmids > arr[i] > threshold and arr[i] > arr[i-1] and arr[i] > arr[min(i+1,len(arr)-1)]:
@@ -142,6 +145,7 @@ def send_serial(port, file_name, transfer_rate):
         time.sleep(transfer_rate)
   except KeyboardInterrupt:
     print("Back to Main")
+  ser.write(struct.pack('>B',1))
   mixer.music.stop()
   ser.close()
 
@@ -163,8 +167,9 @@ def regval_real(port, dt=0.1, transfer_rate = 1):
   precondition: [transfer_rate] >= [dt]
   """
   cont = True
-  pmx = 34
-  n_sd = 3.0  # for removing outliers in array
+  pmx = 35
+  pmin = pmx - 10
+  n_sd = 2.5  # for removing outliers in array
   mixer.init() # initialize pygame.mixer for audio
   while cont:
     try:
@@ -182,7 +187,7 @@ def regval_real(port, dt=0.1, transfer_rate = 1):
           reg_arr = reg_calibrate_array(max_arr, dt, transfer_rate)
           reg_arr = bound_outliers(reg_arr, n_sd)
           norm_reg_arr = normalizexy_array(reg_arr, pmx)
-          norm_reg_arr = bound_extremes_array(norm_reg_arr, pmx, 0)
+          norm_reg_arr = bound_extremes_array(norm_reg_arr, pmx, pmin)
           norm_reg_arr = dynamic_amplification(norm_reg_arr, pmx)
           plot_general(norm_reg_arr)
           audio_catalog[file_name] = int_array(norm_reg_arr)
