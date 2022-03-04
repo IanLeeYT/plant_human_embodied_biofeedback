@@ -2,9 +2,7 @@
 #include <Wire.h>
 
 //define pressure regulator pins
-//don't need pot pin control
 
-//when defining arduino pins use const int
 const int press_reg1 = 3;
 const int press_reg2 = 11;
 
@@ -25,7 +23,6 @@ void setup() {
 
 void loop() {
   if (Serial.available() > 0){
-//    input_regval = Serial.parseInt();
     input_regval = Serial.read();
     if (input_regval > 0){
       Serial.println(input_regval);
