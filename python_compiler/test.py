@@ -22,7 +22,7 @@ class Test:
     run index [test_i] of self.tests
     """
         ser = serial.Serial(self.com_port, self.baud_rate)
-        time.sleep(2)  #wait for serial connection
+        time.sleep(2)  # wait for serial connection
         sending = True
         try:
             while sending:
@@ -32,6 +32,7 @@ class Test:
                     time.sleep(self.transfer_rate)
         except KeyboardInterrupt:
             print("Back to Main")
+        ser.write(struct.pack('>B', 1))
         ser.write(struct.pack('>B', 1))
         ser.close()
 
@@ -71,7 +72,7 @@ if __name__ == "__main__":
     test3 = np.array([26, 1, 1, 26, 1, 1, 26, 1, 1, 26, 1, 1, 26, 1, 1])
     test_arr = [test1, test2, test3]
 
-    com_port = "/dev/cu.usbmodem14201"
+    com_port = "/dev/cu.usbmodem141201"
     transfer_rate = 1
     dtime = 0.1
 

@@ -8,6 +8,16 @@ const int press_reg2 = 11;
 
 int input_regval;
 
+int prev_values[1] = {0};
+int prev_size = 0;
+
+void rollover_one(int arr[], int arr_size, int input){
+  for (int i=arr_size-1; i > 0; i--){
+    prev_values[i] = prev_values[i-1];
+  }
+  arr[0] = input;
+}
+
 void setup() {
   Serial.begin(9600);
   Serial.println("Serial Begin");
@@ -28,6 +38,8 @@ void loop() {
       Serial.println(input_regval);
       analogWrite(press_reg1, input_regval);
       analogWrite(press_reg2, input_regval);
+//      analogWrite(press_reg2, prev_values[prev_size-1]);
+//      rollover_one(prev_values, prev_size, input_regval);
     }
   }
   delay(50);

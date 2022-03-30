@@ -1,10 +1,31 @@
 import numpy as np
 import audio_interpreter
-import time
 import matplotlib.pyplot as plt
-import serial
+import time
 import struct
 from pygame import mixer
+import serial
+import os
+import sys
+import sounddevice as sd
+
+
+def plot_general(y, x=[], sampling_freq=1, title="Plot"):
+    """
+general format for plotting frequency based data.
+"""
+    if not isinstance(y, (np.ndarray, list)):
+        print("fail to generate plot")
+        return
+    _, axis = plt.subplots(1, 1)
+    axis.set_title(title)
+    if len(x) == 0:
+        len_y = len(y)
+        x = np.linspace(0, len_y / sampling_freq, len_y)
+    axis.plot(x, y)
+    axis.set_xlabel("Time (s)")
+    plt.show()
+    plt.close()
 
 
 class Compiler:
@@ -15,29 +36,18 @@ class Compiler:
         self.transfer_rate = transfer_rate
         self.dtime = dtime
         self.freq = freq
-        self.pmx = 35
-        self.pmin = 27
+        self.pmx = 70
+        self.baseline = 40
+        self.local_peaks = 60
+        self.pmin = 0
         # communication port
         self.com_port = com_port
         self.baud_rate = 9600
+        # sd.default.samplerate = fs
+        # data, fs = sf.read(filename, dtype='float32')
+        # sd.play(data, fs)
+        # self.raw_data = None
         mixer.init()  # initialize pygame.mixer for audio
-
-    def plot_general(self, y, x=[], sampling_freq=1, title="Plot"):
-        """
-    general format for plotting frequency based data.
-    """
-        if not isinstance(y, (np.ndarray, list)):
-            print("fail to generate plot")
-            return
-        _, axis = plt.subplots(1, 1)
-        axis.set_title(title)
-        if len(x) == 0:
-            len_y = len(y)
-            x = np.linspace(0, len_y / sampling_freq, len_y)
-        axis.plot(x, y)
-        axis.set_xlabel("Time (s)")
-        plt.show()
-        plt.close()
 
     # discriminative main function
     def regval_interactive(self):
@@ -52,10 +62,12 @@ class Compiler:
     rate of communication is [transfer_rate] Hz
 
     reg_val response values:
-      min - max : 30 - 34 
+      min - max
 
     precondition: [transfer_rate] >= [dt]
     """
+        # change directory to where the script exists
+        os.chdir(os.path.abspath(os.curdir))
         cont = True
         while cont:
             try:
@@ -74,7 +86,7 @@ class Compiler:
                         norm_reg_arr = self.normalizexy_array(reg_arr)
                         norm_reg_arr = self.bound_extremes_array(norm_reg_arr)
                         norm_reg_arr = self.dynamic_amplification(norm_reg_arr)
-                        self.plot_general(norm_reg_arr)
+                        plot_general(norm_reg_arr)
                         self.audio_catalog[file_name] = self.int_array(
                             norm_reg_arr)
                         print("cached")
@@ -86,6 +98,9 @@ class Compiler:
             except Exception as err:
                 print(f"Invalid.: {err}\nTry again\n")
 
+    def firefly():
+        pass
+
     def max_array(self, arr):
         """
     return an array where elements are the maximum of data in 
@@ -95,7 +110,7 @@ class Compiler:
         max_arr = np.zeros(len(arr) // freq_dt)
         for i in range(len(arr) // freq_dt):
             max_arr[i] = np.max(np.abs(arr[i * freq_dt:(i + 1) * freq_dt]))
-        return max_arr
+        return max_arr[1:]  # compensate for regulator time delay
 
     def reg_calibrate_array(self, arr):
         """
@@ -147,18 +162,16 @@ class Compiler:
     """
         frame_len = 2
         threshold = self.pmx / 3
-        pmids = self.pmx - 1
-        pmidw = self.pmx - 2
-        pweak = self.pmx - 3
-        baseline = np.resize(np.array([pweak, pweak, 0, 0, 0]), len(arr))
+        baseline = np.resize(
+            np.array([self.baseline, self.baseline, self.baseline, self.baseline, self.baseline, 0, 0, 0, 0, 0]), len(arr))
         arr_res = np.copy(arr)
         for i in range(1, len(arr)):
-            if pmids > arr[i] > threshold and arr[i] > arr[
+            if self.local_peaks > arr[i] > threshold and arr[i] > arr[
                     i - 1] and arr[i] > arr[min(i + 1,
                                                 len(arr) - 1)]:
-                arr_res[i] = pmids
+                arr_res[i] = self.local_peaks
             if arr[i] == self.pmx and max(arr[i - frame_len:i]) < self.pmx:
-                arr[i] = 255
+                arr[i] = self.pmx * 2
             arr_res[i] = max(arr_res[i], baseline[i])
         return arr_res
 
@@ -177,7 +190,7 @@ class Compiler:
       send serial data to arduino
       """
         ser = serial.Serial(self.com_port, self.baud_rate)
-        time.sleep(2)  #wait for serial connection
+        time.sleep(2)  # wait for serial connection
         sending = True
         try:
             while sending:
@@ -190,14 +203,15 @@ class Compiler:
         except KeyboardInterrupt:
             print("Back to Main")
         ser.write(struct.pack('>B', 1))
+        ser.write(struct.pack('>B', 1))
         mixer.music.stop()
         ser.close()
 
 
 if __name__ == "__main__":
 
-    com_port = "/dev/cu.usbmodem14201"
-    transfer_rate = 1
+    com_port = "/dev/cu.usbmodem142301"
+    transfer_rate = 0.5
     dtime = 0.1
     freq = 22050
 
