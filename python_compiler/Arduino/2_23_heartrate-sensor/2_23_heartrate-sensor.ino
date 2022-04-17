@@ -52,11 +52,11 @@ void setup()
     analogWrite(press_reg1, 0);
     analogWrite(press_reg2, 0);
     //analogWrite(press_reg3, 0);
-    delay(4000);
+    delay(1000);
 }
 
 float sigmoid(int heart_rate) {
-  return 0.5 / (1 + exp(8 + -0.1 * heart_rate)) + 0.5;
+  return 0.5 / (1 + exp(8 + -0.1 * heart_rate)) + 0.6;
 }
 
 void loop()
@@ -66,21 +66,17 @@ void loop()
     while( HIGH ){
     curr_time = millis();
     elapsedtime = .001*(curr_time - start_time); 
-  
-
     //set up pressure regulator values
     //elapsed time is your runtime
 
 
-
-//    if (heart_rate > 0) {
-//      freq_factor = (heart_rate/80.0)*(heart_rate/80.0);
-//    } else {
-//      freq_factor = 1;
-//    }
-
-//     freq_factor = 0.7;
-     freq_factor = 1.4;
+//    heart_rate = 90;
+    
+    if (heart_rate > 0) {
+      freq_factor = (heart_rate/80.0)*(heart_rate/80.0);
+    } else {
+      freq_factor = 1;
+    }
     
     // oceanwave equation v=8
     regval1 = (255/20)*C*(.382*cos(2*pi*(elapsedtime-time_delay)*.14 * freq_factor)+.758*cos(2*pi*(elapsedtime-time_delay)*.2 * freq_factor)+.269*cos(2*pi*(elapsedtime-time_delay)*.24 * freq_factor)+.332*cos(2*pi*(elapsedtime-time_delay)*.28 * freq_factor)+.064*cos(2*pi*(elapsedtime-time_delay)*.48 * freq_factor)+bias);
@@ -99,8 +95,8 @@ void loop()
     analogWrite(press_reg1, int(regval1));
     analogWrite(press_reg2, int(regval2));
     //analogWrite(press_reg3, int(regval3));
-    Serial.print("Heart_rate_is:\t");
-    Serial.println(heart_rate);
+//    Serial.print("Heart_rate_is:\t");
+//    Serial.println(heart_rate);
     Serial.println(regval1);
     delay(100);
   }

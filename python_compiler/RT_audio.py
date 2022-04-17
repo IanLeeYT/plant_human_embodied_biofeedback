@@ -1,3 +1,4 @@
+from curses import raw
 import serial
 import numpy as np
 import time
@@ -10,14 +11,20 @@ import sounddevice as sd
 
 class RT_audio:
 
-    def __init__(self, dtime, transfer_rate, com_port, input_freq, blocksize, buffer_size=20):
+    def __init__(self, dtime, transfer_rate, com_port, input_freq, blocksize, buffer_size):
         # Initialize parameters
+        self.constants = {
+            "default_min": 20,
+            "default_max": 100,
+            "reg_max": 255
+        }
+
         self.transfer_rate = transfer_rate
         self.dtime = dtime
         self.input_freq = input_freq
         self.blocksize = blocksize
         self.buffer = {
-            "data":  np.zeros(buffer_size),
+            "data":  np.full(buffer_size, self.constants["default_min"]),
             "len": buffer_size,
             "i": 0,
             "mean": 0
@@ -27,17 +34,34 @@ class RT_audio:
         self.baud_rate = 9600
 
     def normalize(self, data):
-        norm = max(min(np.linalg.norm(data) * 35, 255), 30)
+        # find range of data from inputstream
+        # norm = max(min(np.linalg.norm(data) * 35, 255), 30)
+        # print(f"Testing: {np.linalg.norm(data)}")
+        raw_norm = np.linalg.norm(data) * 10
+
+        self.buffer["mean"] = self.buffer["mean"] + raw_norm/self.buffer["len"] - \
+            self.buffer["data"][self.buffer["i"]]/self.buffer["len"]
+
+        self.buffer["data"][self.buffer["i"]] = raw_norm
+        self.buffer["i"] += 1
+        self.buffer["i"] %= self.buffer["len"]
+
+        buffer_max = max(
+            self.constants["default_max"], np.max(self.buffer["data"]))
+        buffer_min = min(
+            self.constants["default_min"], np.min(self.buffer["data"]))
+
+        # print(raw_norm, buffer_min, buffer_max)
+
+        coef = raw_norm / self.buffer["mean"]
+
+        norm = int((raw_norm - buffer_min) /
+                   (buffer_max - buffer_min) * self.constants["reg_max"])
+        print(norm)
         return norm
 
     def audio_callback(self, indata, frames, time, status):
         norm = self.normalize(indata)
-        self.buffer["mean"] = self.buffer["mean"] + norm/self.buffer["len"] - \
-            self.buffer["data"][self.buffer["i"]]/self.buffer["len"]
-        self.buffer["data"][self.buffer["i"]] = norm
-        self.buffer["i"] += 1
-        self.buffer["i"] %= self.buffer["len"]
-        print(int(norm))
         self.ser.write(struct.pack('>B', int(norm)))
 
     def interactive(self):
@@ -67,11 +91,14 @@ class RT_audio:
         #  normalize with sliding window, sum of window is certain value
 if __name__ == "__main__":
 
-    com_port = "/dev/cu.usbmodem141201"
+    com_port = "/dev/cu.usbmodem142201"
     transfer_rate = 1
     dtime = 0.1
     input_freq = 44100
-    blocksize = input_freq // 18
+    blocks = 20
+    blocksize = input_freq // blocks
+    buffer_size = blocks * 5
 
-    test = RT_audio(dtime, transfer_rate, com_port, input_freq, blocksize)
+    test = RT_audio(dtime, transfer_rate, com_port,
+                    input_freq, blocksize, buffer_size)
     test.interactive()

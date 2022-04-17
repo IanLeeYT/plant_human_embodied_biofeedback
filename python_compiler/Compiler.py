@@ -81,7 +81,7 @@ class Compiler:
                         print("...Loading...\n")
                         arr = audio_interpreter.audio_to_array(user, self.freq)
                         max_arr = self.max_array(arr)
-                        reg_arr = self.reg_calibrate_array(max_arr)
+                        reg_arr = self.calibrate_array(max_arr)
                         reg_arr = self.bound_outliers(reg_arr)
                         norm_reg_arr = self.normalizexy_array(reg_arr)
                         norm_reg_arr = self.bound_extremes_array(norm_reg_arr)
@@ -112,7 +112,7 @@ class Compiler:
             max_arr[i] = np.max(np.abs(arr[i * freq_dt:(i + 1) * freq_dt]))
         return max_arr[1:]  # compensate for regulator time delay
 
-    def reg_calibrate_array(self, arr):
+    def calibrate_array(self, arr):
         """
     adjust length of [arr] via averaging buckets of elements. Grouping size is [transfer_rate]/[dt]
 
