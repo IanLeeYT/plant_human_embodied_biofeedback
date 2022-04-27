@@ -8,6 +8,7 @@ import serial
 import os
 import sys
 import sounddevice as sd
+from tkinter.filedialog import askopenfilename
 
 
 def plot_general(y, x=[], sampling_freq=1, title="Plot"):
@@ -28,34 +29,43 @@ general format for plotting frequency based data.
     plt.close()
 
 
-class Compiler:
+class Audio_Compiler:
 
     def __init__(self, dtime, transfer_rate, com_port, freq):
+        # Initialize constants
+        self.constants = {
+            "reg_max": 65,
+            "reg_min": 25,
+            "reg_baseline": 32,
+            "reg_local_max": 60,
+            "reg_map_max": 200,
+            "window_size": 6
+        }
 
-        self.audio_catalog = dict()
         self.transfer_rate = transfer_rate
         self.dtime = dtime
         self.freq = freq
-        self.pmx = 70
-        self.baseline = 40
-        self.local_peaks = 60
-        self.pmin = 0
-        # communication port
+
+        mixer.init()  # initialize audio port
+
+        self.audio_catalog = dict()  # cache
+
+        # Communication port
         self.com_port = com_port
         self.baud_rate = 9600
         # sd.default.samplerate = fs
         # data, fs = sf.read(filename, dtype='float32')
         # sd.play(data, fs)
         # self.raw_data = None
-        mixer.init()  # initialize pygame.mixer for audio
 
     # discriminative main function
+
     def regval_interactive(self):
         """
     opens a user session where user can input the path to an audio file for pneumatic actuation or input end/quit to end session.
 
     breaks down audio file in time blocks of [dt] seconds and contruct the breathing function
-    based on the localized maximums. 
+    based on the localized maximums.
 
     establishes a connection with an Arduino system via [port]
 
@@ -71,28 +81,37 @@ class Compiler:
         cont = True
         while cont:
             try:
-                user = input("Please enter the path to audio file: ").strip()
+                user = input("enter to continue or quit: ").strip()
                 if user == "end" or user == "quit":
                     print("Thank You")
                     cont = False
                 else:
+                    user = askopenfilename()
                     file_name = audio_interpreter.audio_path_breakdown(user)[0]
                     if file_name not in self.audio_catalog:
                         print("...Loading...\n")
                         arr = audio_interpreter.audio_to_array(user, self.freq)
-                        max_arr = self.max_array(arr)
-                        reg_arr = self.calibrate_array(max_arr)
+                        plot_general(arr)
+                        amp_arr = self.max_array(arr)
+                        plot_general(amp_arr)
+                        reg_arr = self.calibrate_array(amp_arr)
+                        plot_general(reg_arr)
                         reg_arr = self.bound_outliers(reg_arr)
+                        plot_general(reg_arr)
                         norm_reg_arr = self.normalizexy_array(reg_arr)
-                        norm_reg_arr = self.bound_extremes_array(norm_reg_arr)
+                        plot_general(norm_reg_arr)
                         norm_reg_arr = self.dynamic_amplification(norm_reg_arr)
+                        plot_general(norm_reg_arr)
+                        norm_reg_arr = self.baseline_arr(norm_reg_arr)
+                        plot_general(norm_reg_arr)
+                        norm_reg_arr = self.bound_extremes_array(norm_reg_arr)
                         plot_general(norm_reg_arr)
                         self.audio_catalog[file_name] = self.int_array(
                             norm_reg_arr)
                         print("cached")
                     else:
-                        print("retrieve from cach\n")
-                    self.set_sound("audio/" + user)
+                        print("retrieved from cach\n")
+                    self.set_sound(user)
                     self.send_serial(file_name)
                     print("Finished")
             except Exception as err:
@@ -103,14 +122,25 @@ class Compiler:
 
     def max_array(self, arr):
         """
-    return an array where elements are the maximum of data in 
-    [arr] consecutive local buckets of time intervals [dt] seconds 
+    return an array where elements are the maximum of data in
+    [arr] consecutive local buckets of time intervals [dt] seconds
     """
         freq_dt = int(self.freq * self.dtime)
         max_arr = np.zeros(len(arr) // freq_dt)
         for i in range(len(arr) // freq_dt):
             max_arr[i] = np.max(np.abs(arr[i * freq_dt:(i + 1) * freq_dt]))
         return max_arr[1:]  # compensate for regulator time delay
+
+    def var_array(self, arr):
+        """
+    return an array where elements are the maximum of data in
+    [arr] consecutive local buckets of time intervals [dt] seconds
+    """
+        freq_dt = int(self.freq * self.dtime)
+        var_arr = np.zeros(len(arr) // freq_dt)
+        for i in range(len(arr) // freq_dt):
+            var_arr[i] = np.var(arr[i * freq_dt:(i + 1) * freq_dt])
+        return var_arr[1:]  # compensate for regulator time delay
 
     def calibrate_array(self, arr):
         """
@@ -138,42 +168,52 @@ class Compiler:
 
     def normalizexy_array(self, arr):
         """
-    normalize array: positive maximum is [pmx] * max_feed_factor and positive minimum is 0
+    normalize array: positive maximum is [reg_map_max] and positive minimum is 0
 
     Precondition: [arr] is a positive array
     """
-        max_feed_factor = 2.0
-        max_feed = self.pmx * max_feed_factor
         maxv = np.max(arr)
         minv = np.min(np.abs(arr))
-        norm_arr = (arr - minv) * max_feed / maxv
+        norm_arr = (arr - minv) * self.constants["reg_map_max"] / maxv
         return norm_arr
 
     def bound_extremes_array(self, arr):
-        return np.clip(arr, self.pmin, self.pmx, out=arr)
+        return np.clip(arr, self.constants["reg_min"], self.constants["reg_max"], out=arr)
+
+    def smooth_array(self, arr, strength):
+        pass
 
     def dynamic_amplification(self, arr):
         """
-    Extract peaks and amplify audio signal change over a threshold. 
-    Incorporate baseline activity to [arr]
-    Expand short peaks
+    Extract peaks and amplify audio signal change over a threshold.
 
     precondition: 255 >= [pmx] >= 0
     """
-        frame_len = 2
-        threshold = self.pmx / 3
-        baseline = np.resize(
-            np.array([self.baseline, self.baseline, self.baseline, self.baseline, self.baseline, 0, 0, 0, 0, 0]), len(arr))
-        arr_res = np.copy(arr)
-        for i in range(1, len(arr)):
-            if self.local_peaks > arr[i] > threshold and arr[i] > arr[
-                    i - 1] and arr[i] > arr[min(i + 1,
-                                                len(arr) - 1)]:
-                arr_res[i] = self.local_peaks
-            if arr[i] == self.pmx and max(arr[i - frame_len:i]) < self.pmx:
-                arr[i] = self.pmx * 2
-            arr_res[i] = max(arr_res[i], baseline[i])
-        return arr_res
+        means = np.lib.stride_tricks.sliding_window_view(
+            arr, self.constants["window_size"])
+        means = np.concatenate(
+            (arr[:self.constants["window_size"]-1], np.mean(means, axis=1)))
+        return arr * arr / means
+
+    def xsinx(self, amp, f, t, c):
+        arr = amp * np.sin(f * t) + c
+        plot_general(arr)
+        return arr
+
+    def baseline_arr(self, arr):
+        """
+        Incorporate baseline activity to [arr]
+        """
+        # baseline_dt = 3
+        # baseline_size = int(baseline_dt / self.transfer_rate)
+        # baseline = np.resize(
+        #     np.array([self.baseline, self.baseline, self.baseline, self.baseline, self.baseline, 0, 0, 0, 0, 0]), len(arr))
+        amp = (self.constants["reg_baseline"] - self.constants["reg_min"]) / 2
+        c = self.constants["reg_min"] + amp
+        t = np.arange(0, arr.shape[0] * self.transfer_rate, self.transfer_rate)
+        f = 0.5
+        baseline = self.xsinx(amp, f, t, c)
+        return np.maximum(arr, baseline)
 
     def int_array(self, arr):
         """
@@ -210,11 +250,11 @@ class Compiler:
 
 if __name__ == "__main__":
 
-    com_port = "/dev/cu.usbmodem142301"
+    com_port = "/dev/cu.usbmodem141101"
     transfer_rate = 0.5
     dtime = 0.1
     freq = 22050
 
-    compiler = Compiler(dtime, transfer_rate, com_port, freq)
+    compiler = Audio_Compiler(dtime, transfer_rate, com_port, freq)
 
     compiler.regval_interactive()

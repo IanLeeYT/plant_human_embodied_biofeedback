@@ -9,29 +9,38 @@ from sklearn.utils import indexable
 import sounddevice as sd
 
 
-class RT_audio:
+class RTA_Compiler:
 
     def __init__(self, dtime, transfer_rate, com_port, input_freq, blocksize, buffer_size):
-        # Initialize parameters
+        # Initialize constants
         self.constants = {
-            "default_min": 20,
-            "default_max": 100,
-            "reg_max": 255
+            "default_min": 5.0,
+            "default_max": 45.0,
+            "reg_max": 65,
+            "reg_min": 25,
+            "reg_map_max": 200
         }
 
         self.transfer_rate = transfer_rate
         self.dtime = dtime
         self.input_freq = input_freq
         self.blocksize = blocksize
+
+        # Buffer
         self.buffer = {
             "data":  np.full(buffer_size, self.constants["default_min"]),
             "len": buffer_size,
             "i": 0,
-            "mean": 0
+            "mean": self.constants["default_min"],
+            "prev_mean": self.constants["default_min"],
+            "var": 0
         }
-        # communication port
+        # Communication port
         self.com_port = com_port
         self.baud_rate = 9600
+
+    def bound_extremes_array(self, v):
+        return max(min(v, self.constants["reg_max"]), self.constants["reg_min"])
 
     def normalize(self, data):
         # find range of data from inputstream
@@ -39,29 +48,46 @@ class RT_audio:
         # print(f"Testing: {np.linalg.norm(data)}")
         raw_norm = np.linalg.norm(data) * 10
 
+        self.buffer["prev_mean"] = self.buffer["mean"]
+
         self.buffer["mean"] = self.buffer["mean"] + raw_norm/self.buffer["len"] - \
             self.buffer["data"][self.buffer["i"]]/self.buffer["len"]
+
+        self.buffer["var"] = ((self.buffer["len"] - 2)*self.buffer["var"] + (raw_norm -
+                              self.buffer["mean"]) * (raw_norm - self. buffer["prev_mean"])) / (self.buffer["len"] - 1)
 
         self.buffer["data"][self.buffer["i"]] = raw_norm
         self.buffer["i"] += 1
         self.buffer["i"] %= self.buffer["len"]
 
         buffer_max = max(
-            self.constants["default_max"], np.max(self.buffer["data"]))
+            self.constants["default_max"], self.buffer["mean"] +
+            2 * np.sqrt(self.buffer["var"]))
         buffer_min = min(
-            self.constants["default_min"], np.min(self.buffer["data"]))
+            self.constants["default_min"], max(
+                0, self.buffer["mean"] - 2 * np.sqrt(self.buffer["var"])))
 
-        # print(raw_norm, buffer_min, buffer_max)
+        # print(round(np.std(self.buffer["data"]), 3), round(
+        #     np.sqrt(self.buffer["var"]), 3))
+
+        # buffer_max = self.constants["default_max"]
+        # buffer_min = self.constants["default_min"]
 
         coef = raw_norm / self.buffer["mean"]
 
-        norm = int((raw_norm - buffer_min) /
-                   (buffer_max - buffer_min) * self.constants["reg_max"])
-        print(norm)
+        norm = int(coef * (raw_norm - buffer_min) / (buffer_max -
+                                                     buffer_min) * self.constants["reg_map_max"])
+
+        norm = self.bound_extremes_array(norm)
+
+        print(norm, f"   {round(raw_norm, 2)}", f"   {int(buffer_max)}   ", round(np.sqrt(self.buffer["var"]), 3), int(buffer_min),  round(
+            self.buffer["mean"], 2), round(coef, 2))
+
         return norm
 
     def audio_callback(self, indata, frames, time, status):
         norm = self.normalize(indata)
+        # norm = self.bound_extremes_array(norm)
         self.ser.write(struct.pack('>B', int(norm)))
 
     def interactive(self):
@@ -87,18 +113,19 @@ class RT_audio:
             self.ser.close()
             print("Quitting")
 
-
         #  normalize with sliding window, sum of window is certain value
+
+
 if __name__ == "__main__":
 
-    com_port = "/dev/cu.usbmodem142201"
+    com_port = "/dev/cu.usbmodem141101"
     transfer_rate = 1
     dtime = 0.1
     input_freq = 44100
-    blocks = 20
+    blocks = 10
     blocksize = input_freq // blocks
-    buffer_size = blocks * 5
+    buffer_size = blocks * 2
 
-    test = RT_audio(dtime, transfer_rate, com_port,
-                    input_freq, blocksize, buffer_size)
+    test = RTA_Compiler(dtime, transfer_rate, com_port,
+                        input_freq, blocksize, buffer_size)
     test.interactive()

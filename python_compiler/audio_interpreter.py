@@ -28,17 +28,8 @@ def audio_to_array(file_path, sr_freq):
 
   copies and converts the file into audio/_name_of_file_.wav if needed
   """
-    file_name, file_ext = audio_path_breakdown(file_path)
-    new_file_path = "audio/" + file_name + ".wav"
-    new_file_exist = os.path.exists(new_file_path)
-    if not new_file_exist:
-        if file_ext == ".mp3":
-            mp3_to_wav(file_path, new_file_path)
-        else:
-            copyfile(file_path, new_file_path)
-    arr = librosa.load(new_file_path,
+    arr = librosa.load(file_path,
                        sr=sr_freq)[0]  # sampling rate is 22050hz
-    # rate, arr = read(new_file_path)
     audio_array = np.array(arr, dtype=float)
     audio_array = audio_array if audio_array.ndim == 1 else audio_array[:, 0]
     return audio_array

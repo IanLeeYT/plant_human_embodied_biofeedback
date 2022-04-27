@@ -5,14 +5,15 @@ import struct
 import re
 
 
-class Test:
+class Manual_Compiler:
 
     def __init__(self, dtime, transfer_rate, com_port, tests=[]):
-        # Initialize parameters
+        # Initialize constants
         self.transfer_rate = transfer_rate
         self.dtime = dtime
         self.tests = tests
-        # communication port
+
+        # Communication port
         self.com_port = com_port
         self.baud_rate = 9600
 
@@ -55,7 +56,7 @@ class Test:
                 user = [int(user)]
             elif re.fullmatch(r't\d+', user):
                 try:
-                    user = self.tests[int(user[1:])]
+                    user = self.tests[int(user[1:])-1]
                 except:
                     print("index of test not found")
                     continue
@@ -70,11 +71,13 @@ if __name__ == "__main__":
         [33, 33, 33, 32, 32, 32, 22, 1, 1, 1, 34, 1, 1, 1, 34, 1, 1])
     test2 = np.array([10, 20, 30, 10, 10, 30, 20, 10])
     test3 = np.array([26, 1, 1, 26, 1, 1, 26, 1, 1, 26, 1, 1, 26, 1, 1])
-    test_arr = [test1, test2, test3]
+    test4 = np.array([50, 50, 50, 50, 50, 1, 1, 1, 1, 1, 1, 1])
+    test5 = np.array([50, 60, 60, 50, 50, 40, 40, 30, 30, 30, 25, 25, 20, 20])
+    test_arr = [test1, test2, test3, test4, test5]
 
-    com_port = "/dev/cu.usbmodem141201"
+    com_port = "/dev/cu.usbmodem141101"
     transfer_rate = 1
     dtime = 0.1
 
-    test = Test(dtime, transfer_rate, com_port, test_arr)
+    test = Manual_Compiler(dtime, transfer_rate, com_port, test_arr)
     test.interactive()
