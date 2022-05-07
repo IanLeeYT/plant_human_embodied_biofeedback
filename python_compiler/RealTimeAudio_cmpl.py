@@ -1,17 +1,14 @@
-from curses import raw
 import serial
 import numpy as np
 import time
 import struct
-import re
 
-from sklearn.utils import indexable
 import sounddevice as sd
 
 
 class RTA_Compiler:
 
-    def __init__(self, dtime, transfer_rate, com_port, input_freq, blocksize, buffer_size):
+    def __init__(self, com_port, input_freq, blocksize, buffer_size):
         # Initialize constants
         self.constants = {
             "default_min": 5.0,
@@ -21,8 +18,6 @@ class RTA_Compiler:
             "reg_map_max": 200
         }
 
-        self.transfer_rate = transfer_rate
-        self.dtime = dtime
         self.input_freq = input_freq
         self.blocksize = blocksize
 
@@ -111,7 +106,7 @@ class RTA_Compiler:
             self.ser.write(struct.pack('>B', 1))
             self.ser.write(struct.pack('>B', 1))
             self.ser.close()
-            print("Quitting")
+            print("quit process")
 
         #  normalize with sliding window, sum of window is certain value
 
@@ -119,13 +114,11 @@ class RTA_Compiler:
 if __name__ == "__main__":
 
     com_port = "/dev/cu.usbmodem141101"
-    transfer_rate = 1
-    dtime = 0.1
     input_freq = 44100
     blocks = 10
     blocksize = input_freq // blocks
     buffer_size = blocks * 2
 
-    test = RTA_Compiler(dtime, transfer_rate, com_port,
+    test = RTA_Compiler(com_port,
                         input_freq, blocksize, buffer_size)
     test.interactive()

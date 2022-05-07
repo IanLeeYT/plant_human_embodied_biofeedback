@@ -7,15 +7,24 @@ import re
 
 class Manual_Compiler:
 
-    def __init__(self, dtime, transfer_rate, com_port, tests=[]):
+    def __init__(self, transfer_rate, com_port):
         # Initialize constants
         self.transfer_rate = transfer_rate
-        self.dtime = dtime
-        self.tests = tests
+        self.tests = self.default_tests()
 
         # Communication port
         self.com_port = com_port
         self.baud_rate = 9600
+
+    def default_tests(self):
+        test1 = np.array(
+            [33, 33, 33, 32, 32, 32, 22, 1, 1, 1, 34, 1, 1, 1, 34, 1, 1])
+        test2 = np.array([10, 20, 30, 10, 10, 30, 20, 10])
+        test3 = np.array([26, 1, 1, 26, 1, 1, 26, 1, 1, 26, 1, 1, 26, 1, 1])
+        test4 = np.array([50, 50, 50, 50, 50, 1, 1, 1, 1, 1, 1, 1])
+        test5 = np.array([50, 60, 60, 50, 50, 40, 40,
+                         30, 30, 30, 25, 25, 20, 20])
+        return [test1, test2, test3, test4, test5]
 
     def send_serial(self, data):
         """
@@ -32,7 +41,7 @@ class Manual_Compiler:
                     ser.write(struct.pack('>B', d))
                     time.sleep(self.transfer_rate)
         except KeyboardInterrupt:
-            print("Back to Main")
+            print("quit process")
         ser.write(struct.pack('>B', 1))
         ser.write(struct.pack('>B', 1))
         ser.close()
@@ -49,7 +58,7 @@ class Manual_Compiler:
     when input is "end" or "quit", return
     """
         while True:
-            user = input("Input: ")
+            user = input("Input or quit: ")
             if user == "end" or user == "quit":
                 break
             elif re.fullmatch(r'\d+', user):
@@ -67,17 +76,8 @@ class Manual_Compiler:
 
 if __name__ == "__main__":
 
-    test1 = np.array(
-        [33, 33, 33, 32, 32, 32, 22, 1, 1, 1, 34, 1, 1, 1, 34, 1, 1])
-    test2 = np.array([10, 20, 30, 10, 10, 30, 20, 10])
-    test3 = np.array([26, 1, 1, 26, 1, 1, 26, 1, 1, 26, 1, 1, 26, 1, 1])
-    test4 = np.array([50, 50, 50, 50, 50, 1, 1, 1, 1, 1, 1, 1])
-    test5 = np.array([50, 60, 60, 50, 50, 40, 40, 30, 30, 30, 25, 25, 20, 20])
-    test_arr = [test1, test2, test3, test4, test5]
-
     com_port = "/dev/cu.usbmodem141101"
     transfer_rate = 1
-    dtime = 0.1
 
-    test = Manual_Compiler(dtime, transfer_rate, com_port, test_arr)
-    test.interactive()
+    compiler = Manual_Compiler(transfer_rate, com_port)
+    compiler.interactive()

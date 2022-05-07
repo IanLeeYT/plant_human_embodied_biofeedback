@@ -6,8 +6,6 @@ import struct
 from pygame import mixer
 import serial
 import os
-import sys
-import sounddevice as sd
 from tkinter.filedialog import askopenfilename
 
 
@@ -60,7 +58,7 @@ class Audio_Compiler:
 
     # discriminative main function
 
-    def regval_interactive(self):
+    def interactive(self):
         """
     opens a user session where user can input the path to an audio file for pneumatic actuation or input end/quit to end session.
 
@@ -81,7 +79,7 @@ class Audio_Compiler:
         cont = True
         while cont:
             try:
-                user = input("enter to continue or quit: ").strip()
+                user = input("Enter to continue or quit: ").strip()
                 if user == "end" or user == "quit":
                     print("Thank You")
                     cont = False
@@ -91,21 +89,27 @@ class Audio_Compiler:
                     if file_name not in self.audio_catalog:
                         print("...Loading...\n")
                         arr = audio_interpreter.audio_to_array(user, self.freq)
-                        plot_general(arr)
+                        plot_general(arr, sampling_freq=self.freq)
                         amp_arr = self.max_array(arr)
-                        plot_general(amp_arr)
+                        plot_general(amp_arr, sampling_freq=1/self.dtime)
                         reg_arr = self.calibrate_array(amp_arr)
-                        plot_general(reg_arr)
+                        plot_general(reg_arr, sampling_freq=1 /
+                                     self.transfer_rate)
                         reg_arr = self.bound_outliers(reg_arr)
-                        plot_general(reg_arr)
+                        plot_general(reg_arr, sampling_freq=1 /
+                                     self.transfer_rate)
                         norm_reg_arr = self.normalizexy_array(reg_arr)
-                        plot_general(norm_reg_arr)
+                        plot_general(
+                            norm_reg_arr, sampling_freq=1/self.transfer_rate)
                         norm_reg_arr = self.dynamic_amplification(norm_reg_arr)
-                        plot_general(norm_reg_arr)
+                        plot_general(
+                            norm_reg_arr, sampling_freq=1/self.transfer_rate)
                         norm_reg_arr = self.baseline_arr(norm_reg_arr)
-                        plot_general(norm_reg_arr)
+                        plot_general(
+                            norm_reg_arr, sampling_freq=1/self.transfer_rate)
                         norm_reg_arr = self.bound_extremes_array(norm_reg_arr)
-                        plot_general(norm_reg_arr)
+                        plot_general(
+                            norm_reg_arr, sampling_freq=1/self.transfer_rate)
                         self.audio_catalog[file_name] = self.int_array(
                             norm_reg_arr)
                         print("cached")
@@ -241,7 +245,7 @@ class Audio_Compiler:
                     ser.write(struct.pack('>B', d))
                     time.sleep(self.transfer_rate)
         except KeyboardInterrupt:
-            print("Back to Main")
+            print("quit process")
         ser.write(struct.pack('>B', 1))
         ser.write(struct.pack('>B', 1))
         mixer.music.stop()
@@ -257,4 +261,4 @@ if __name__ == "__main__":
 
     compiler = Audio_Compiler(dtime, transfer_rate, com_port, freq)
 
-    compiler.regval_interactive()
+    compiler.interactive()
