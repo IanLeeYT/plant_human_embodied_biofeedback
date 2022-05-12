@@ -32,10 +32,9 @@ class Audio_Compiler:
     def __init__(self, dtime, transfer_rate, com_port, freq):
         # Initialize constants
         self.constants = {
-            "reg_max": 65,
-            "reg_min": 25,
+            "reg_max": 50,
+            "reg_min": 30,
             "reg_baseline": 32,
-            "reg_local_max": 60,
             "reg_map_max": 200,
             "window_size": 6
         }
@@ -96,18 +95,23 @@ class Audio_Compiler:
                         plot_general(reg_arr, sampling_freq=1 /
                                      self.transfer_rate)
                         reg_arr = self.bound_outliers(reg_arr)
+                        # print(reg_arr)
                         plot_general(reg_arr, sampling_freq=1 /
                                      self.transfer_rate)
                         norm_reg_arr = self.normalizexy_array(reg_arr)
+                        # print(norm_reg_arr)
                         plot_general(
                             norm_reg_arr, sampling_freq=1/self.transfer_rate)
                         norm_reg_arr = self.dynamic_amplification(norm_reg_arr)
+                        # print(norm_reg_arr)
                         plot_general(
                             norm_reg_arr, sampling_freq=1/self.transfer_rate)
                         norm_reg_arr = self.baseline_arr(norm_reg_arr)
+                        # print(norm_reg_arr)
                         plot_general(
                             norm_reg_arr, sampling_freq=1/self.transfer_rate)
                         norm_reg_arr = self.bound_extremes_array(norm_reg_arr)
+                        # print(norm_reg_arr)
                         plot_general(
                             norm_reg_arr, sampling_freq=1/self.transfer_rate)
                         self.audio_catalog[file_name] = self.int_array(
@@ -133,7 +137,8 @@ class Audio_Compiler:
         max_arr = np.zeros(len(arr) // freq_dt)
         for i in range(len(arr) // freq_dt):
             max_arr[i] = np.max(np.abs(arr[i * freq_dt:(i + 1) * freq_dt]))
-        return max_arr[1:]  # compensate for regulator time delay
+        # compensate for regulator time delay
+        return max_arr[int(1/self.transfer_rate):]
 
     def var_array(self, arr):
         """
@@ -197,27 +202,25 @@ class Audio_Compiler:
             arr, self.constants["window_size"])
         means = np.concatenate(
             (arr[:self.constants["window_size"]-1], np.mean(means, axis=1)))
+        means[means == 0] = 1
         return arr * arr / means
 
     def xsinx(self, amp, f, t, c):
         arr = amp * np.sin(f * t) + c
-        plot_general(arr)
+        # plot_general(arr)
         return arr
 
     def baseline_arr(self, arr):
         """
         Incorporate baseline activity to [arr]
         """
-        # baseline_dt = 3
-        # baseline_size = int(baseline_dt / self.transfer_rate)
-        # baseline = np.resize(
-        #     np.array([self.baseline, self.baseline, self.baseline, self.baseline, self.baseline, 0, 0, 0, 0, 0]), len(arr))
-        amp = (self.constants["reg_baseline"] - self.constants["reg_min"]) / 2
-        c = self.constants["reg_min"] + amp
-        t = np.arange(0, arr.shape[0] * self.transfer_rate, self.transfer_rate)
-        f = 0.5
-        baseline = self.xsinx(amp, f, t, c)
-        return np.maximum(arr, baseline)
+        # amp = (self.constants["reg_baseline"] - self.constants["reg_min"]) / 2
+        # c = self.constants["reg_min"] + amp
+        # t = np.arange(0, arr.shape[0] * self.transfer_rate, self.transfer_rate)
+        # f = 0.5
+        # baseline = self.xsinx(amp, f, t, c)
+        # return np.maximum(arr, baseline)
+        return arr
 
     def int_array(self, arr):
         """
@@ -246,6 +249,8 @@ class Audio_Compiler:
                     time.sleep(self.transfer_rate)
         except KeyboardInterrupt:
             print("quit process")
+        except Exception as e:
+            print(f"unexpected error: {e}")
         ser.write(struct.pack('>B', 1))
         ser.write(struct.pack('>B', 1))
         mixer.music.stop()

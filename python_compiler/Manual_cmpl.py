@@ -42,6 +42,8 @@ class Manual_Compiler:
                     time.sleep(self.transfer_rate)
         except KeyboardInterrupt:
             print("quit process")
+        except Exception as e:
+            print(f"unexpected error: {e}")
         ser.write(struct.pack('>B', 1))
         ser.write(struct.pack('>B', 1))
         ser.close()

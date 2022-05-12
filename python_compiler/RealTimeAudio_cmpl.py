@@ -13,8 +13,8 @@ class RTA_Compiler:
         self.constants = {
             "default_min": 5.0,
             "default_max": 45.0,
-            "reg_max": 65,
-            "reg_min": 25,
+            "reg_max": 50,
+            "reg_min": 30,
             "reg_map_max": 200
         }
 
@@ -103,10 +103,12 @@ class RTA_Compiler:
                 with stream:
                     sd.sleep(duration * 1000)
         except KeyboardInterrupt:
-            self.ser.write(struct.pack('>B', 1))
-            self.ser.write(struct.pack('>B', 1))
-            self.ser.close()
             print("quit process")
+        except Exception as e:
+            print(f"unexpected error: {e}")
+        self.ser.write(struct.pack('>B', 1))
+        self.ser.write(struct.pack('>B', 1))
+        self.ser.close()
 
         #  normalize with sliding window, sum of window is certain value
 

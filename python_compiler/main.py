@@ -5,8 +5,8 @@ import Audio_cmpl
 if __name__ == "__main__":
 
     # Initialize parameters
-    com_port = "/dev/cu.usbmodem142301"
-    transfer_rate = 1
+    com_port = "/dev/cu.usbmodem142101"
+    transfer_rate = 0.2
 
     dtime = 0.1
     freq = 22050
